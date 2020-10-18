@@ -66,6 +66,7 @@ public:
 
         SPI1.begin();
         config_dma();
+        _initialized_shared_context = true;
     }
 
     static void resetBuffers(){
@@ -106,7 +107,7 @@ public:
         }
     }
 
-    static void (*fn_consumeIncommingSamples)(int8_t *rxbuf, unsigned int index);
+    static void (*fn_consumeIncommingSamples)(int8_t *, unsigned int);
 protected:
     static void prepareForDMA_RX() {
         if (read_index < 128) {
