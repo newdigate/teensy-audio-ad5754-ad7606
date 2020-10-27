@@ -30,8 +30,6 @@
 
 bool ad5754_ad7606_shared_context::_initialized_shared_context = false;
 
-unsigned int ad5754_ad7606_shared_context::commandsTransmitted = 0;
-
 unsigned int ad5754_ad7606_shared_context::read_index = 0;
 
 DMAChannel ad5754_ad7606_shared_context::dmatx(false);
