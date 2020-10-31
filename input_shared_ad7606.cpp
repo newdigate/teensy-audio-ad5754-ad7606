@@ -48,33 +48,34 @@ void AudioInputSharedAD7606::begin(void) {
 }
 
 void AudioInputSharedAD7606::update(void) {
-        unsigned int i, j;
-        audio_block_t *new_block[8];
-        audio_block_t *out_block[8];
+    unsigned int i, j;
+    audio_block_t *new_block[8];
+    audio_block_t *out_block[8];
 
-        // allocate 8 new blocks.  If any fails, allocate none
+    // allocate 8 new blocks.  If any fails, allocate none
+    for (i = 0; i < 8; i++) {
+        new_block[i] = allocate();
+        if (new_block[i] == nullptr) {
+            for (j = 0; j < i; j++) {
+                release(new_block[j]);
+            }
+            memset(new_block, 0, sizeof(new_block));
+            break;
+        }
+    }
+    __disable_irq();
+    memcpy(out_block, block_incoming, sizeof(out_block));
+    memcpy(block_incoming, new_block, sizeof(block_incoming));
+    __enable_irq();
+
+    if (out_block[0] != nullptr) {
+        // if we got 1 block, all 16 are filled
         for (i = 0; i < 8; i++) {
-            new_block[i] = allocate();
-            if (new_block[i] == nullptr) {
-                for (j = 0; j < i; j++) {
-                    release(new_block[j]);
-                }
-                memset(new_block, 0, sizeof(new_block));
-                break;
-            }
+            transmit(out_block[i], i);
+            release(out_block[i]);
         }
-        __disable_irq();
-        memcpy(out_block, block_incoming, sizeof(out_block));
-        memcpy(block_incoming, new_block, sizeof(block_incoming));
-        ad5754_ad7606_shared_context::resetBuffers();
-        __enable_irq();
-        if (out_block[0] != nullptr) {
-            // if we got 1 block, all 16 are filled
-            for (i = 0; i < 8; i++) {
-                transmit(out_block[i], i);
-                release(out_block[i]);
-            }
-        }
+    }
+    ad5754_ad7606_shared_context::resetBuffers();
 }
 
 void AudioInputSharedAD7606::consumeIncommingSamples(int8_t *rxbuf, unsigned int index) {
