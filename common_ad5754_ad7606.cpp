@@ -29,21 +29,20 @@
 #include "common_ad5754_ad7606.h"
 
 bool ad5754_ad7606_shared_context::_initialized_shared_context = false;
-
-unsigned int ad5754_ad7606_shared_context::commandsTransmitted = 0;
-
+volatile bool ad5754_ad7606_shared_context::alreadyReset = false;
 unsigned int ad5754_ad7606_shared_context::read_index = 0;
 
 DMAChannel ad5754_ad7606_shared_context::dmatx(false);
 
 DMAChannel ad5754_ad7606_shared_context::dmarx(false);
 
-volatile uint8_t ad5754_ad7606_shared_context::txbuf[6] = {0,0,0,0,0,0};
+volatile uint8_t ad5754_ad7606_shared_context::txbuf[32] = {};
 
 int ad5754_ad7606_shared_context::txvoltages[8] = {0,0,0,0,0,0,0,0};
 
-int8_t ad5754_ad7606_shared_context::rxbuf[32];
+volatile int8_t ad5754_ad7606_shared_context::rxbuf[32];
 
 IntervalTimer ad5754_ad7606_shared_context::_timer = IntervalTimer();
 
-void (*ad5754_ad7606_shared_context::fn_consumeIncommingSamples)(int8_t *, unsigned int) = nullptr;
+void (*ad5754_ad7606_shared_context::fn_consumeIncommingSamples)(volatile int8_t *, unsigned int) = nullptr;
+void (*ad5754_ad7606_shared_context::fn_setOutgoingSamples)(int[], unsigned int) = nullptr;

@@ -33,10 +33,38 @@
 #define AD7607_START_CONVERSION 5
 #define AD7607_CHIP_SELECT 36
 #define AD7607_RESET 4
-#define DA_SYNC 16
+#define DA_SYNC 38
 
+/* AD5754R Register Map */
+#define AD5754R_REG_DAC             0x00 // DAC register
+#define AD5754R_REG_RANGE_SELECT    0x01 // Output range select register
+#define AD5754R_REG_POWER_CONTROL   0x02 // Power control register
+#define AD5754R_REG_CONTROL         0x03 // Control register
+
+/* AD5754R Channel Address */
+#define AD5754R_DAC_A               0x00 // Address of channel A
+#define AD5754R_DAC_B               0x01 // Address of channel B
+#define AD5754R_DAC_C               0x02 // Address of channel C
+#define AD5754R_DAC_D               0x03 // Address of channel D
+#define AD5754R_DAC_ALL             0x04 // All four DACs
+
+
+/* AD5754R Range Bits */
+#define AD5754R_UNIPOLAR_5_RANGE    0x00 // 0..+5(V)
+#define AD5754R_UNIPOLAR_10_RANGE   0x01 // 0..+10(V)
+#define AD5754R_UNIPOLAR_10_8_RANGE 0x02 // 0..+10.8(V)
+#define AD5754R_BIPOLAR_5_RANGE     0x03 // -5..+5(V)
+#define AD5754R_BIPOLAR_10_RANGE    0x04 // -10...+10(V)
+#define AD5754R_BIPOLAR_10_8_RANGE  0x05 // -10.8...+10.8(V)
+
+#include <SPI.h>
+#include <imxrt.h>
 #include "output_shared_ad5754_dual.h"
 #include "SPI.h"
+
+#define MOSI_PIN 26
+#define MISO_PIN 39
+#define SCK_PIN 27
 
 class ad5754_ad7606_shared_context {
 
@@ -47,6 +75,7 @@ public:
 
     static void initialize() {
         if (_initialized_shared_context) return;
+
         // input pins
         pinMode(AD7607_BUSY, INPUT_PULLUP);
 
@@ -54,179 +83,233 @@ public:
         pinMode(AD7607_START_CONVERSION, OUTPUT);
         pinMode(AD7607_CHIP_SELECT, OUTPUT);
         pinMode(AD7607_RESET, OUTPUT);
+        pinMode(DA_SYNC, OUTPUT);
 
         digitalWrite(AD7607_START_CONVERSION, HIGH);
         digitalWrite(AD7607_RESET, LOW);
         digitalWrite(AD7607_CHIP_SELECT, HIGH);
-
-        attachInterrupt(AD7607_BUSY, busyFallingEdgeISR, FALLING);
-
-        pinMode(DA_SYNC, OUTPUT);
         digitalWrite(DA_SYNC, HIGH);
 
+        SPI1.setSCK(SCK_PIN);
+        SPI1.setCS(DA_SYNC);
+        SPI1.setMOSI(MOSI_PIN);
+        SPI1.setMISO(MISO_PIN);
         SPI1.begin();
+
+        SPI1.beginTransaction(SPISettings());
+        digitalWrite(DA_SYNC, LOW);
+        uint8_t configureDac[] = {
+                0x10,
+                0x00,
+                0x0f,
+                0x10,
+                0x00,
+                0x0f
+        };
+        SPI1.transfer(configureDac, 6);
+        SPI1.endTransaction();
+        digitalWrite(DA_SYNC, HIGH);
+        delayMicroseconds(10);
+
+
+        // Set voltage range for DAC0, DAC1
+        digitalWrite(DA_SYNC, LOW);
+        uint8_t configureDacVoltageRange[] = {
+                (AD5754R_REG_RANGE_SELECT << 3) + AD5754R_DAC_ALL,
+                0x00,
+                AD5754R_BIPOLAR_10_RANGE,
+                (AD5754R_REG_RANGE_SELECT << 3) + AD5754R_DAC_ALL,
+                0x00,
+                AD5754R_BIPOLAR_10_RANGE
+        };
+        SPI1.beginTransaction(SPISettings());
+        SPI1.transfer(configureDacVoltageRange, 6);
+        SPI1.endTransaction();
+        digitalWrite(DA_SYNC, HIGH);
+        delayMicroseconds(10);
+
+        setClockDivider_noInline(30000000);         // 30 MHz
         config_dma();
         _initialized_shared_context = true;
     }
 
     static void resetBuffers(){
-        read_index = 0;
-        commandsTransmitted = 0;
+        if(!alreadyReset) {
+            alreadyReset = true;
+            _timer.end();
+            _timer.begin(timer, (1000000.0 / 44100.0) - 0.075);
+            read_index = 0;
+            toggleStartConversion();
+            beginTransfer();
+        }
     }
 
     static void beginTransfer()
     {
-        if (commandsTransmitted == 0) {
-            if (read_index >= 128){
-                return;
-            }
-            AudioOutputSharedAD5754Dual::setOutputVoltages(txvoltages, read_index);
-
-            // first 3 bytes -> DAC0
-            txbuf[0] = 0x00;              // channel == 0
-            txbuf[1] = txvoltages[0] >> 8;
-            txbuf[2] = txvoltages[0] & 0xff;
-
-            // second 3 bytes -> DAC1
-            txbuf[3] = 0x00;              // channel == 0
-            txbuf[4] = txvoltages[4] >> 8;
-            txbuf[5] = txvoltages[4] & 0xff;
-        }
-
-        if (commandsTransmitted < 4) {
-            digitalWrite(DA_SYNC, LOW);
-            IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(31))) | LPSPI_TCR_FRAMESZ(7); // Transmit Control Register: ?
-            IMXRT_LPSPI3_S.FCR = 0; // FIFO control register
-
-            IMXRT_LPSPI3_S.DER = LPSPI_DER_RDDE | LPSPI_DER_TDDE;//DMA Enable register: enable DMA on RX
-            IMXRT_LPSPI3_S.SR = 0x3f00; // StatusRegister: clear out all of the other status...
-            _timer.begin(timer, (1000000.0/44100.0)-13.055);
-            SPI1.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
-            dmarx.enable();
-            dmatx.enable();
-        }
-    }
-
-    static void (*fn_consumeIncommingSamples)(int8_t *, unsigned int);
-protected:
-    static void prepareForDMA_RX() {
-        if (read_index < 128) {
-            digitalWrite(AD7607_CHIP_SELECT, LOW);
-        }
-    }
-
-    // ADC signals conversion complete - start sampling process: read 8 16bit samples from adc and write 8 16bit samples to dac...
-    static void busyFallingEdgeISR() {
-        if (read_index < 128) {
-
-            digitalWrite(AD7607_CHIP_SELECT, LOW);
-
-            IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(31))) | LPSPI_TCR_FRAMESZ(7); // Transmit Control Register: ?
-            IMXRT_LPSPI3_S.FCR = 0; // FIFO control register
-
-            IMXRT_LPSPI3_S.DER = LPSPI_DER_RDDE | LPSPI_DER_TDDE;//DMA Enable register: enable DMA on RX
-            IMXRT_LPSPI3_S.SR = 0x3f00; // StatusRegister: clear out all of the other status...
-
-            prepareForDMA_RX();
-            beginTransfer();
+        noInterrupts();
+        if (read_index < 128 && fn_setOutgoingSamples != nullptr) {
+            fn_setOutgoingSamples(txvoltages, read_index);
         };
+
+        for (uint8_t count=0; count<4; count++) {
+            txbuf[(count*8)+3] = count;                     //DAC0, channel=count
+            txbuf[(count*8)+5] = txvoltages[count+4] >> 8;
+            txbuf[(count*8)+4] = txvoltages[count+4] & 0xff;
+            txbuf[(count*8)+0] = count;                     //DAC1, channel=count
+            txbuf[(count*8)+2] = txvoltages[count] >> 8;
+            txbuf[(count*8)+1] = txvoltages[count] & 0xff;
+        }
+        interrupts();
+        while (IMXRT_LPSPI3_S.FSR & 0x1f);          //FIFO Status register: wait until fifo is complete
+        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register? Module Busy flag
+        SPI1.setCS(DA_SYNC);                        //Set DA_SYNC to HARDWARE CS
+        IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(7))) | LPSPI_TCR_FRAMESZ(47) ;  // Change framesize to 48 bits
+        IMXRT_LPSPI3_S.FCR = 0;
+        IMXRT_LPSPI3_S.DER = LPSPI_DER_TDDE;        //DMA Enable register: enable DMA on TX
+        IMXRT_LPSPI3_S.SR = 0x3f00;                 // status register: clear out all of the other status...
+        dmatx.enable();
     }
+
+    static void beginReceive() {
+        while (IMXRT_LPSPI3_S.FSR & 0x1f);          //FIFO Status register: wait until fifo is complete
+        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register: wait until Module Busy flag is cleared
+
+        IMXRT_LPSPI3_S.CR = IMXRT_LPSPI3_S.CR | LPSPI_CR_RRF;                                           // control register: reset receive fifo
+
+        *(portConfigRegister(DA_SYNC)) = 0;                                                             // Turn hardware CS off
+        IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(47))) | LPSPI_TCR_FRAMESZ(7);    // Change framesize to 8 bits
+        IMXRT_LPSPI3_S.FCR = 0;                                                                         // Reset FIFO control register
+        IMXRT_LPSPI3_S.DER = LPSPI_DER_RDDE;                                                            // DMA Enable register: enable DMA on RX
+        IMXRT_LPSPI3_S.SR = 0x3f00;                                                                     // status register: clear out all of the other status...
+
+        dmarx.enable();
+        digitalWrite(AD7607_CHIP_SELECT, LOW);
+
+        //Trigger SCK for 16 bytes by writing to the Transmit Data Register
+        for (int i=0; i < 16; i++) {
+            IMXRT_LPSPI3_S.TDR = 0xFF;
+        }
+    }
+
+    static void (*fn_consumeIncommingSamples)(volatile int8_t *, unsigned int);
+    static void (*fn_setOutgoingSamples)(int[], unsigned int);
+
+protected:
+    static volatile bool alreadyReset;
 
     static void toggleStartConversion(){
-        if (read_index < 127) {
-            digitalWrite(AD7607_START_CONVERSION, LOW);
-            digitalWrite(AD7607_START_CONVERSION, HIGH);
-        }
+        digitalWrite(AD7607_START_CONVERSION, LOW);
+        digitalWrite(AD7607_START_CONVERSION, HIGH);
     }
 
     static void config_dma(void)
     {
         dmatx.begin(true); // allocate the DMA channel first
-        dmatx.TCD->SADDR = txbuf;
-        dmatx.TCD->SOFF = 1;
-        dmatx.TCD->ATTR = DMA_TCD_ATTR_SSIZE(0) | DMA_TCD_ATTR_DSIZE(0);
-        dmatx.TCD->NBYTES_MLNO = 1;
-        dmatx.TCD->SLAST = -sizeof(txbuf);
-        dmatx.TCD->DOFF = 0;
-        dmatx.TCD->CITER_ELINKNO = sizeof(txbuf);
-        dmatx.TCD->DLASTSGA = 0;
-        dmatx.TCD->BITER_ELINKNO = sizeof(txbuf);
-        dmatx.TCD->CSR = DMA_TCD_CSR_INTMAJOR;
-        dmatx.TCD->DADDR = (void *)((uint32_t)&(IMXRT_LPSPI3_S.TDR));
+        dmatx.disable();
+        dmatx.sourceBuffer(txbuf, 32);
+        dmatx.transferSize(4);
+        dmatx.transferCount(8);
+        dmatx.destination((volatile uint32_t &)IMXRT_LPSPI3_S.TDR);
         dmatx.triggerAtHardwareEvent(DMAMUX_SOURCE_LPSPI3_TX);
         dmatx.disableOnCompletion();
         dmatx.attachInterrupt(txisr);
         dmatx.interruptAtCompletion();
 
         dmarx.begin(true); // allocate the DMA channel first
+        dmarx.disable();
         dmarx.destinationBuffer(rxbuf, 16);
-        dmarx.transferCount(16);
         dmarx.transferSize(1);
+        dmarx.transferCount(16);
         dmarx.source((volatile uint8_t &)IMXRT_LPSPI3_S.RDR);
-        dmarx.interruptAtCompletion();
         dmarx.triggerAtHardwareEvent(DMAMUX_SOURCE_LPSPI3_RX);
         dmarx.disableOnCompletion();
         dmarx.attachInterrupt(rxisr);
+        dmarx.interruptAtCompletion();
     }
 
     static void txisr(void) {
-        commandsTransmitted++;
-        unsigned int tx = commandsTransmitted;
         dmatx.clearInterrupt();
+
         SPI1.endTransaction();
 
-        IMXRT_LPSPI3_S.FCR = LPSPI_FCR_TXWATER(15); // FIFO control register: set transmit watermark
-        IMXRT_LPSPI3_S.DER = 0;                     // DMA enable register: disable DMA TX
-        IMXRT_LPSPI3_S.CR = LPSPI_CR_MEN | LPSPI_CR_RRF | LPSPI_CR_RTF; // Control register... ?
-        IMXRT_LPSPI3_S.SR = 0x3f00;                 // Status register: clear out all of the other status...
-
-        while (IMXRT_LPSPI3_S.FSR & 0x1f);          //FIFO Status Register? wait until FIFO is empty before continuing...
-        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register? Module Busy flag, wait until SPI is not busy...
-
-        digitalWrite(DA_SYNC, HIGH);
-
-        if (tx < 4) {
-            txbuf[0] = commandsTransmitted;                   //DAC0, channel=count
-            txbuf[1] = txvoltages[commandsTransmitted] >> 8;
-            txbuf[2] = txvoltages[commandsTransmitted] & 0xff;
-            txbuf[3] = commandsTransmitted;                   //DAC1, channel=count
-            txbuf[4] = txvoltages[commandsTransmitted+4] >> 8;
-            txbuf[5] = txvoltages[commandsTransmitted+4] & 0xff;
-
-            beginTransfer();
-        } else {
-            commandsTransmitted = 0;
-            read_index++;
-        }
+        IMXRT_LPSPI3_S.FCR = LPSPI_FCR_TXWATER(15); //FIFO control register
+        IMXRT_LPSPI3_S.DER = 0;
+        IMXRT_LPSPI3_S.CR = LPSPI_CR_MEN | LPSPI_CR_RRF | LPSPI_CR_RTF; // actually clear both...
+        IMXRT_LPSPI3_S.SR = 0x3f00;    // clear out all of the other status...
+        while (IMXRT_LPSPI3_S.FSR & 0x1f);
+        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;
+        beginReceive();
     }
 
     static void rxisr(void) {
         dmarx.clearInterrupt();
-        dmarx.disable();
+        SPI1.endTransaction();
 
-        digitalWrite(AD7607_CHIP_SELECT, HIGH);
+        IMXRT_LPSPI3_S.FCR = LPSPI_FCR_TXWATER(15); // _spi_fcr_save; // restore the FSR status...
+        IMXRT_LPSPI3_S.DER = 0;
+        IMXRT_LPSPI3_S.CR = LPSPI_CR_MEN | LPSPI_CR_RRF | LPSPI_CR_RTF; // actually clear both...
+        IMXRT_LPSPI3_S.SR = 0x3f00;    // clear out all of the other status...
 
         if (read_index < 128 && fn_consumeIncommingSamples != nullptr) {
             fn_consumeIncommingSamples(rxbuf, read_index);
         };
+
+        digitalWrite(AD7607_CHIP_SELECT, HIGH);
     }
 
     static void timer(void){
-        _timer.end();
-        toggleStartConversion();
+        if (read_index > 2 && alreadyReset)
+            alreadyReset = false;
+        if (read_index < 127) {
+            read_index++;
+            toggleStartConversion();
+            beginTransfer();
+        } else {
+            _timer.end();
+        }
+    }
+
+    static void setClockDivider_noInline(uint32_t clk)
+    {
+        static const uint32_t clk_sel[4] = {
+                664615384,  // PLL3 PFD1
+                720000000,  // PLL3 PFD0
+                528000000,  // PLL2
+                396000000}; // PLL2 PFD2
+
+        uint32_t cbcmr = CCM_CBCMR;
+        uint32_t clkhz = clk_sel[(cbcmr >> 4) & 0x03] / (((cbcmr >> 26 ) & 0x07 ) + 1);  // LPSPI peripheral clock
+
+        uint32_t d, div;
+        d = clk ? clkhz/clk : clkhz;
+
+        if (d && clkhz/d > clk) d++;
+        if (d > 257) d= 257;  // max div
+        if (d > 2) {
+            div = d-2;
+        } else {
+            div =0;
+        }
+
+        uint32_t ccr = LPSPI_CCR_SCKDIV(div) | LPSPI_CCR_DBT(div/2) | LPSPI_CCR_PCSSCK(div/2);
+
+        //Serial.printf("SPI.setClockDivider_noInline CCR:%x TCR:%x\n", _ccr, port().TCR);
+        IMXRT_LPSPI3_S.CR = 0;
+        IMXRT_LPSPI3_S.CFGR1 = LPSPI_CFGR1_MASTER | LPSPI_CFGR1_SAMPLE;
+        IMXRT_LPSPI3_S.CCR = ccr;
+        IMXRT_LPSPI3_S.CR = LPSPI_CR_MEN;
     }
 
     static bool _initialized_shared_context;
-    static unsigned int commandsTransmitted;
     static unsigned int read_index;
 
     static DMAChannel dmarx;
     static DMAChannel dmatx;
 
-    static volatile uint8_t txbuf[6];
+    static volatile uint8_t txbuf[32];
     static int txvoltages[8];
 
-    static int8_t rxbuf[32];
+    static volatile int8_t rxbuf[32];
 
     static IntervalTimer _timer;
 

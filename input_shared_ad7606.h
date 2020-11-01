@@ -41,7 +41,7 @@ public:
     virtual void update(void);
     void begin(void);
 
-    static void consumeIncommingSamples(int8_t *rxbuf, unsigned int index);
+    static void consumeIncommingSamples(volatile int8_t *rxbuf, unsigned int index);
 
 
 protected:

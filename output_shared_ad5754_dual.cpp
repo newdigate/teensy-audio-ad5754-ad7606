@@ -47,13 +47,14 @@ bool AudioOutputSharedAD5754Dual::update_responsibility = false;
 void AudioOutputSharedAD5754Dual::begin(void)
 {
     ad5754_ad7606_shared_context::initialize();
-
-    pinMode(0, OUTPUT);
+	pinMode(0, OUTPUT);
 	digitalWrite(0, HIGH);
 
 	for (int i=0; i < 8; i++) {
 		block_input[i] = NULL;
 	}
+	ad5754_ad7606_shared_context::fn_setOutgoingSamples = setOutputVoltages;
+
 }
 
 void AudioOutputSharedAD5754Dual::update(void)
@@ -68,14 +69,14 @@ void AudioOutputSharedAD5754Dual::update(void)
 		prev[i] = block_input[i];
 		block_input[i] = receiveReadOnly(i);
 	}
-    ad5754_ad7606_shared_context::resetBuffers();
+
 
 	__enable_irq();
 
 	for (i=0; i < 8; i++) {
 		if (prev[i]) release(prev[i]);
 	}
-    ad5754_ad7606_shared_context::beginTransfer();
+	ad5754_ad7606_shared_context::resetBuffers();
     digitalWrite(0, HIGH);
 }
 
