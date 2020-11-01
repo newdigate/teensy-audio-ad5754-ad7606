@@ -58,6 +58,7 @@
 #define AD5754R_BIPOLAR_10_8_RANGE  0x05 // -10.8...+10.8(V)
 
 #include <SPI.h>
+#include <imxrt.h>
 #include "output_shared_ad5754_dual.h"
 #include "SPI.h"
 
@@ -87,7 +88,6 @@ public:
         digitalWrite(AD7607_START_CONVERSION, HIGH);
         digitalWrite(AD7607_RESET, LOW);
         digitalWrite(AD7607_CHIP_SELECT, HIGH);
-        //attachInterrupt(AD7607_BUSY, busyFallingEdgeISR, FALLING);
         digitalWrite(DA_SYNC, HIGH);
 
         SPI1.setSCK(SCK_PIN);
@@ -137,7 +137,7 @@ public:
         if(!alreadyReset) {
             alreadyReset = true;
             _timer.end();
-            _timer.begin(timer, (1000000.0 / 44100.0) - 0.4);
+            _timer.begin(timer, (1000000.0 / 44100.0) - 0.075);
             read_index = 0;
             toggleStartConversion();
             beginTransfer();
@@ -146,65 +146,56 @@ public:
 
     static void beginTransfer()
     {
+        noInterrupts();
         if (read_index < 128 && fn_setOutgoingSamples != nullptr) {
             fn_setOutgoingSamples(txvoltages, read_index);
         };
 
-
         for (uint8_t count=0; count<4; count++) {
-
-            txbuf[(count*8)+3] = count;                   //DAC0, channel=count
+            txbuf[(count*8)+3] = count;                     //DAC0, channel=count
             txbuf[(count*8)+5] = txvoltages[count+4] >> 8;
             txbuf[(count*8)+4] = txvoltages[count+4] & 0xff;
-            txbuf[(count*8)+0] = count;                //DAC1, channel=count
+            txbuf[(count*8)+0] = count;                     //DAC1, channel=count
             txbuf[(count*8)+2] = txvoltages[count] >> 8;
             txbuf[(count*8)+1] = txvoltages[count] & 0xff;
         }
-        while (IMXRT_LPSPI3_S.FSR & 0x1f);
+        interrupts();
+        while (IMXRT_LPSPI3_S.FSR & 0x1f);          //FIFO Status register: wait until fifo is complete
         while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register? Module Busy flag
-        SPI1.setCS(DA_SYNC);
-
-        IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(15))) | LPSPI_TCR_FRAMESZ(47) ;
-        //IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_TXMSK) | LPSPI_TCR_RXMSK);
+        SPI1.setCS(DA_SYNC);                        //Set DA_SYNC to HARDWARE CS
+        IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(7))) | LPSPI_TCR_FRAMESZ(47) ;  // Change framesize to 48 bits
         IMXRT_LPSPI3_S.FCR = 0;
-        IMXRT_LPSPI3_S.DER = LPSPI_DER_TDDE;// | LPSPI_DER_RDDE; //enable DMA on both TX and RX
-        IMXRT_LPSPI3_S.SR = 0x3f00; // clear out all of the other status...
+        IMXRT_LPSPI3_S.DER = LPSPI_DER_TDDE;        //DMA Enable register: enable DMA on TX
+        IMXRT_LPSPI3_S.SR = 0x3f00;                 // status register: clear out all of the other status...
         dmatx.enable();
     }
 
     static void beginReceive() {
-        while (IMXRT_LPSPI3_S.FSR & 0x1f);
-        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register? Module Busy flag
+        while (IMXRT_LPSPI3_S.FSR & 0x1f);          //FIFO Status register: wait until fifo is complete
+        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register: wait until Module Busy flag is cleared
 
-        IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(47))) | LPSPI_TCR_FRAMESZ(15);
-        //IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_RXMSK) | LPSPI_TCR_TXMSK);
-        IMXRT_LPSPI3_S.FCR = 0;
-        IMXRT_LPSPI3_S.DER = LPSPI_DER_RDDE; //enable DMA on RX
-        IMXRT_LPSPI3_S.SR = 0x3f00; // clear out all of the other status...
+        IMXRT_LPSPI3_S.CR = IMXRT_LPSPI3_S.CR | LPSPI_CR_RRF;                                           // control register: reset receive fifo
 
-        //uint32_t **x = (uint32_t**)SPI1.spiclass_lpspi3_hardware.pcs_select_input_register;
-        //x[0][0] = 0;
-        *(portConfigRegister(DA_SYNC)) = 0;
-        //SPI1.spiclass_lpspi3_hardware.pcs_select_input_register[0][0] = SPI1.spiclass_lpspi3_hardware.cs_mux[0];
+        *(portConfigRegister(DA_SYNC)) = 0;                                                             // Turn hardware CS off
+        IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(47))) | LPSPI_TCR_FRAMESZ(7);    // Change framesize to 8 bits
+        IMXRT_LPSPI3_S.FCR = 0;                                                                         // Reset FIFO control register
+        IMXRT_LPSPI3_S.DER = LPSPI_DER_RDDE;                                                            // DMA Enable register: enable DMA on RX
+        IMXRT_LPSPI3_S.SR = 0x3f00;                                                                     // status register: clear out all of the other status...
+
         dmarx.enable();
         digitalWrite(AD7607_CHIP_SELECT, LOW);
-        for (int i=0; i < 8; i++) {
-            IMXRT_LPSPI3_S.TDR = 0xFFFF;
+
+        //Trigger SCK for 16 bytes by writing to the Transmit Data Register
+        for (int i=0; i < 16; i++) {
+            IMXRT_LPSPI3_S.TDR = 0xFF;
         }
     }
 
-    static void (*fn_consumeIncommingSamples)(int8_t *, unsigned int);
+    static void (*fn_consumeIncommingSamples)(volatile int8_t *, unsigned int);
     static void (*fn_setOutgoingSamples)(int[], unsigned int);
 
 protected:
     static volatile bool alreadyReset;
-
-    // ADC signals conversion complete - start sampling process: read 8 16bit samples from adc and write 8 16bit samples to dac...
-    static void busyFallingEdgeISR() {
-       // if (read_index < 128) {
-            //beginReceive();
-       // };
-    }
 
     static void toggleStartConversion(){
         digitalWrite(AD7607_START_CONVERSION, LOW);
@@ -227,9 +218,9 @@ protected:
         dmarx.begin(true); // allocate the DMA channel first
         dmarx.disable();
         dmarx.destinationBuffer(rxbuf, 16);
-        dmarx.transferSize(2);
-        dmarx.transferCount(8);
-        dmarx.source((volatile uint16_t &)IMXRT_LPSPI3_S.RDR);
+        dmarx.transferSize(1);
+        dmarx.transferCount(16);
+        dmarx.source((volatile uint8_t &)IMXRT_LPSPI3_S.RDR);
         dmarx.triggerAtHardwareEvent(DMAMUX_SOURCE_LPSPI3_RX);
         dmarx.disableOnCompletion();
         dmarx.attachInterrupt(rxisr);
@@ -241,7 +232,7 @@ protected:
 
         SPI1.endTransaction();
 
-        IMXRT_LPSPI3_S.FCR = LPSPI_FCR_TXWATER(15); // _spi_fcr_save; // restore the FSR status...
+        IMXRT_LPSPI3_S.FCR = LPSPI_FCR_TXWATER(15); //FIFO control register
         IMXRT_LPSPI3_S.DER = 0;
         IMXRT_LPSPI3_S.CR = LPSPI_CR_MEN | LPSPI_CR_RRF | LPSPI_CR_RTF; // actually clear both...
         IMXRT_LPSPI3_S.SR = 0x3f00;    // clear out all of the other status...
@@ -259,18 +250,11 @@ protected:
         IMXRT_LPSPI3_S.CR = LPSPI_CR_MEN | LPSPI_CR_RRF | LPSPI_CR_RTF; // actually clear both...
         IMXRT_LPSPI3_S.SR = 0x3f00;    // clear out all of the other status...
 
-        while (IMXRT_LPSPI3_S.FSR & 0x1f);
-        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register? Module Busy flag
-        digitalWrite(AD7607_CHIP_SELECT, HIGH);
-        /*
-        for (int count=0; count<16; count++) {
-            Serial.printf("%x, ", rxbuf[count]);
-        }
-        Serial.println();
-        */
         if (read_index < 128 && fn_consumeIncommingSamples != nullptr) {
             fn_consumeIncommingSamples(rxbuf, read_index);
         };
+
+        digitalWrite(AD7607_CHIP_SELECT, HIGH);
     }
 
     static void timer(void){
@@ -325,7 +309,7 @@ protected:
     static volatile uint8_t txbuf[32];
     static int txvoltages[8];
 
-    static int8_t rxbuf[32];
+    static volatile int8_t rxbuf[32];
 
     static IntervalTimer _timer;
 
