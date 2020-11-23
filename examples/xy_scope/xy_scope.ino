@@ -6,10 +6,10 @@
 #include "input_shared_ad7606.h"
 #include "output_shared_ad5754_dual.h"
 
-#include "ScopeView.h"
+//https://github.com/newdigate/teensy-audio-libtftscope/tree/st7735_t3
+#include "XYScopeView.h"
 #include <ST7735_t3.h> // Hardware-specific library
-#include <SPI.h>
-  
+
 #define TFT_SCLK 13  // SCLK can also use pin 14
 #define TFT_MOSI 11  // MOSI can also use pin 7
 #define TFT_CS   6  // CS & DC can use pins 2, 6, 9, 10, 15, 20, 21, 22, 23
@@ -17,6 +17,8 @@
 #define TFT_RST   -1 // RST can use any pin
 //Adafruit_ST7735 TFT = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 ST7735_t3 TFT = ST7735_t3(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+// GUItool: begin automatically generated code
+
 // GUItool: begin automatically generated code
 AudioSynthWaveformSine   sine1;          //xy=272,218
 AudioSynthWaveformSine   sine2;          //xy=272,218
@@ -54,60 +56,57 @@ AudioConnection          patchCord13(ad7606, 4, audioRecordQueue5, 0);
 AudioConnection          patchCord14(ad7606, 5, audioRecordQueue6, 0);
 AudioConnection          patchCord15(ad7606, 6, audioRecordQueue7, 0);
 AudioConnection          patchCord16(ad7606, 7, audioRecordQueue8, 0);
-int16_t colors[8] = {ST7735_GREEN,ST7735_RED,ST7735_BLUE,ST7735_CYAN,ST7735_MAGENTA,ST7735_YELLOW,ST7735_GREEN,ST7735_WHITE};
 
-ScopeView scopeViewCV1 = ScopeView(TFT, audioRecordQueue1, colors[0], (int16_t)ST7735_BLACK, 64); 
-ScopeView scopeViewCV2 = ScopeView(TFT, audioRecordQueue2, colors[1], (int16_t)ST7735_BLACK, 64); 
-ScopeView scopeViewCV3 = ScopeView(TFT, audioRecordQueue3, colors[2], (int16_t)ST7735_BLACK, 64); 
-ScopeView scopeViewCV4 = ScopeView(TFT, audioRecordQueue4, colors[3], (int16_t)ST7735_BLACK, 64); 
-ScopeView scopeViewCV5 = ScopeView(TFT, audioRecordQueue5, colors[4], (int16_t)ST7735_BLACK, 64); 
-ScopeView scopeViewCV6 = ScopeView(TFT, audioRecordQueue6, colors[5], (int16_t)ST7735_BLACK, 64); 
-ScopeView scopeViewCV7 = ScopeView(TFT, audioRecordQueue7, colors[6], (int16_t)ST7735_BLACK, 64); 
-ScopeView scopeViewCV8 = ScopeView(TFT, audioRecordQueue8, colors[7], (int16_t)ST7735_BLACK, 64); 
-const ScopeView* cvscopes[] = {&scopeViewCV1, &scopeViewCV2, &scopeViewCV3, &scopeViewCV4, 
-&scopeViewCV5, &scopeViewCV6, &scopeViewCV7, &scopeViewCV8};
+// GUItool: end automatically generated code
+int16_t colors[8] = {ST7735_GREEN,ST7735_RED,ST7735_BLUE,ST7735_CYAN,ST7735_MAGENTA,ST7735_YELLOW,0xffAA,ST7735_WHITE};
+XYScopeView scopeViewCV1 = XYScopeView(TFT, audioRecordQueue1, audioRecordQueue2, colors[0], (int16_t)ST7735_BLACK, 64, 64);
+XYScopeView scopeViewCV2 = XYScopeView(TFT, audioRecordQueue3, audioRecordQueue4, colors[1], (int16_t)ST7735_BLACK, 64, 64);
+XYScopeView scopeViewCV3 = XYScopeView(TFT, audioRecordQueue5, audioRecordQueue6, colors[2], (int16_t)ST7735_BLACK, 64, 64);
+XYScopeView scopeViewCV4 = XYScopeView(TFT, audioRecordQueue7, audioRecordQueue8, colors[3], (int16_t)ST7735_BLACK, 64, 64);
+
+const XYScopeView* cvscopes[] = {&scopeViewCV1, &scopeViewCV2, &scopeViewCV3, &scopeViewCV4};
 
 #include <Bounce.h>
 #define BUTTON 30
 Bounce bouncer = Bounce( BUTTON,5 ); 
 
-void setup() {
-  Serial.begin(9600);
-  //while(!Serial) {
-  //  delay(1);
-  //}
-  AudioMemory(80);
-  //pinMode(41, INPUT);
-  pinMode(BUTTON, INPUT_PULLUP);
-      
-  TFT.initR(INITR_144GREENTAB);
-  TFT.setRotation(3);
-  TFT.fillScreen(ST7735_BLACK);
 
-    sine1.frequency(62.5);
-    sine1.amplitude(1.0);
+#include <Encoder.h>
+
+// Change these two numbers to the pins connected to your encoder.
+//   Best Performance: both pins have interrupt capability
+//   Good Performance: only the first pin has interrupt capability
+//   Low Performance:  neither pin has interrupt capability
+Encoder myEnc(28, 29);
+//   avoid using pins with LEDs attached
+long oldPosition  = -999;
+
+#include <TimerOne.h>
+
+float baseFrequency = 1.0; 
+
+void setup() {
+    Serial.begin(9600);
+    AudioMemory(100);
+    pinMode(41, INPUT);
+    pinMode(BUTTON, INPUT_PULLUP);
+
+    setFrequencies();
+    sine1.amplitude(0.8);
+    sine2.amplitude(0.8);
+    sine3.amplitude(0.8);
+    sine4.amplitude(0.8);
+    sine5.amplitude(0.8);
+    sine6.amplitude(0.8); 
+    sine7.amplitude(0.8); 
+    sine8.amplitude(0.8); 
+
     
-    sine2.frequency(125);
-    sine2.amplitude(1.0);
-    
-    sine3.frequency(250);
-    sine3.amplitude(1.0);
-    
-    sine4.frequency(500);
-    sine4.amplitude(1.0);
-    
-    sine5.frequency(750);
-    sine5.amplitude(1.0);
-    
-    sine6.frequency(1000);
-    sine6.amplitude(1.0);
-    
-    sine7.frequency(1500);
-    sine7.amplitude(1.0);
-    
-    sine8.frequency(2000);
-    sine8.amplitude(1.0);
-    
+
+    TFT.initR(INITR_144GREENTAB);
+    TFT.setRotation(3);
+    TFT.fillScreen(ST7735_BLACK);
+    TFT.useFrameBuffer(false);
     audioRecordQueue1.begin();
     audioRecordQueue2.begin();     
     audioRecordQueue3.begin();
@@ -116,30 +115,55 @@ void setup() {
     audioRecordQueue6.begin();
     audioRecordQueue7.begin();
     audioRecordQueue8.begin();
+
+    //TFT.updateScreenAsync(false);
+      Timer1.initialize(50000);
+  Timer1.attachInterrupt(blinkLED); 
+  
 }
-unsigned count = 0;
 bool updateDisplay = true, toggleUpdateWhenDisplayReachesEnd = false;
 
-void loop() {
+void setFrequencies() {
+  sine1.frequency(baseFrequency);
+  sine2.frequency(baseFrequency*2.0);
+  sine3.frequency(baseFrequency*4.0);
+  sine4.frequency(baseFrequency*8.0);
+  sine5.frequency(baseFrequency*16.0);
+  sine6.frequency(baseFrequency*32.0);
+  sine7.frequency(baseFrequency*64.0);
+  sine8.frequency(baseFrequency*128.0);
+}
 
+void blinkLED(void)
+{
+  if(!TFT.asyncUpdateActive()){
+    TFT.updateScreenAsync(false);
+  }
+}
+
+void loop() {
+  //delayMicroseconds(100);
   if ((cvscopes[0]->oscilliscope_x >= 127 && toggleUpdateWhenDisplayReachesEnd) 
       || (toggleUpdateWhenDisplayReachesEnd && !updateDisplay)) {
     updateDisplay = !updateDisplay;
     toggleUpdateWhenDisplayReachesEnd = false;
   }
-  
-  for (int i=0;i<8;i++) {
+  for (int i=0;i<4;i++) {
     cvscopes[i]->checkForUpdateBuffer();
   }
+
   if (updateDisplay) 
-  {
-    for (int i=0;i<8;i++) 
-      cvscopes[i]->undrawScope();
-      
-    for (int i=0;i<8;i++) 
+  {    
+    for (int i=0;i<4;i++) 
       cvscopes[i]->drawScope();
   }
-
+   
+  while (Serial.available()) {
+    char ch = Serial.read();
+    //Serial.print(ch, DEC);
+    if (ch == 10) 
+      toggleUpdateWhenDisplayReachesEnd = true;
+  }
   bouncer.update();
 
   // Get the update value
@@ -147,17 +171,12 @@ void loop() {
   if ( value == HIGH) {
     toggleUpdateWhenDisplayReachesEnd = true;
   }
-  
-  if (count % 100000 == 0) {
-    Serial.print("all=");
-    Serial.print(AudioProcessorUsage());
-    Serial.print(",");
-    Serial.print(AudioProcessorUsageMax());
-    Serial.print("    ");
-    Serial.print("Memory: ");
-    Serial.print(AudioMemoryUsage());
-    Serial.print(",");
-    Serial.print(AudioMemoryUsageMax());
-    Serial.println();
+
+  long newPosition = myEnc.read();
+  if (newPosition/4 != oldPosition/4) {
+    oldPosition = newPosition;
+    baseFrequency = pow(2, newPosition/16.0);
+    Serial.printf("%2d, %2f\n",newPosition/4, baseFrequency);
+    setFrequencies();
   }
 }

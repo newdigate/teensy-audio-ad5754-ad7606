@@ -33,6 +33,7 @@
 #define AD7607_START_CONVERSION 5
 #define AD7607_CHIP_SELECT 36
 #define AD7607_RESET 4
+#define AD7607_RANGE_SELECT 37
 #define DA_SYNC 38
 
 /* AD5754R Register Map */
@@ -83,11 +84,13 @@ public:
         pinMode(AD7607_START_CONVERSION, OUTPUT);
         pinMode(AD7607_CHIP_SELECT, OUTPUT);
         pinMode(AD7607_RESET, OUTPUT);
+        pinMode(AD7607_RANGE_SELECT, OUTPUT);
         pinMode(DA_SYNC, OUTPUT);
 
         digitalWrite(AD7607_START_CONVERSION, HIGH);
         digitalWrite(AD7607_RESET, LOW);
         digitalWrite(AD7607_CHIP_SELECT, HIGH);
+        digitalWrite(AD7607_RANGE_SELECT, HIGH);
         digitalWrite(DA_SYNC, HIGH);
 
         SPI1.setSCK(SCK_PIN);
