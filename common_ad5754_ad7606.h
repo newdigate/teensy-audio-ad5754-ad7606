@@ -32,7 +32,7 @@
 #define AD7607_BUSY 3
 #define AD7607_START_CONVERSION 5
 #define AD7607_CHIP_SELECT 36
-#define AD7607_RESET 4
+#define AD7607_RESET 35
 #define AD7607_RANGE_SELECT 37
 #define DA_SYNC 38
 
@@ -66,6 +66,7 @@
 #define MOSI_PIN 26
 #define MISO_PIN 39
 #define SCK_PIN 27
+#define LRCLK_CPY 40
 
 class ad5754_ad7606_shared_context {
 
@@ -86,12 +87,15 @@ public:
         pinMode(AD7607_RESET, OUTPUT);
         pinMode(AD7607_RANGE_SELECT, OUTPUT);
         pinMode(DA_SYNC, OUTPUT);
+        pinMode(LRCLK_CPY, INPUT);
 
         digitalWrite(AD7607_START_CONVERSION, HIGH);
         digitalWrite(AD7607_RESET, LOW);
         digitalWrite(AD7607_CHIP_SELECT, HIGH);
         digitalWrite(AD7607_RANGE_SELECT, HIGH);
         digitalWrite(DA_SYNC, HIGH);
+
+        attachInterrupt(digitalPinToInterrupt(LRCLK_CPY),timer,RISING);
 
         SPI1.setSCK(SCK_PIN);
         SPI1.setCS(DA_SYNC);
@@ -139,8 +143,8 @@ public:
     static void resetBuffers(){
         if(!alreadyReset) {
             alreadyReset = true;
-            _timer.end();
-            _timer.begin(timer, (1000000.0 / 44100.0) - 0.075);
+            //_timer.end();
+            //_timer.begin(timer, (1000000.0 / 44100.0) - 3.0);
             read_index = 0;
             toggleStartConversion();
             beginTransfer();
@@ -267,8 +271,6 @@ protected:
             read_index++;
             toggleStartConversion();
             beginTransfer();
-        } else {
-            _timer.end();
         }
     }
 
@@ -313,8 +315,6 @@ protected:
     static int txvoltages[8];
 
     static volatile int8_t rxbuf[32];
-
-    static IntervalTimer _timer;
 
 };
 

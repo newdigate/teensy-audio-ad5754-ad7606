@@ -42,7 +42,7 @@ int ad5754_ad7606_shared_context::txvoltages[8] = {0,0,0,0,0,0,0,0};
 
 volatile int8_t ad5754_ad7606_shared_context::rxbuf[32];
 
-IntervalTimer ad5754_ad7606_shared_context::_timer = IntervalTimer();
+//IntervalTimer ad5754_ad7606_shared_context::_timer = IntervalTimer();
 
 void (*ad5754_ad7606_shared_context::fn_consumeIncommingSamples)(volatile int8_t *, unsigned int) = nullptr;
 void (*ad5754_ad7606_shared_context::fn_setOutgoingSamples)(int[], unsigned int) = nullptr;
