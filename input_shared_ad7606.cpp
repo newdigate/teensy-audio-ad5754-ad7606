@@ -42,8 +42,17 @@ audio_block_t * AudioInputSharedAD7606::block_incoming[8] = {
 };
 bool AudioInputSharedAD7606::update_responsibility = false;
 
-void AudioInputSharedAD7606::begin(void) {
-    ad5754_ad7606_shared_context::initialize();
+void AudioInputSharedAD7606::begin(int pin_AD7607_BUSY, int pin_AD7607_START_CONVERSION, int pin_AD7607_CHIP_SELECT,
+                                   int pin_AD7607_RESET, int pin_AD7607_RANGE_SELECT, int pin_DA_SYNC,
+                                   int pin_LRCLK_CPY) {
+    ad5754_ad7606_shared_context::initialize(
+            pin_AD7607_BUSY,
+            pin_AD7607_START_CONVERSION,
+            pin_AD7607_CHIP_SELECT,
+            pin_AD7607_RESET,
+            pin_AD7607_RANGE_SELECT,
+            pin_DA_SYNC,
+            pin_LRCLK_CPY);
     ad5754_ad7606_shared_context::fn_consumeIncommingSamples = consumeIncommingSamples;
 }
 
@@ -87,3 +96,4 @@ void AudioInputSharedAD7606::consumeIncommingSamples(volatile int8_t *rxbuf, uns
     }
     //Serial.println("v");
 }
+

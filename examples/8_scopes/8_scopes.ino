@@ -3,6 +3,8 @@
 #include <SPI.h>
 #include <SD.h>
 #include <SerialFlash.h>
+
+// https://github.com/newdigate/teensy-audio-ad5754-ad7606/tree/remove-timer
 #include "input_shared_ad7606.h"
 #include "output_shared_ad5754_dual.h"
 
@@ -15,6 +17,17 @@
 #define TFT_CS   6  // CS & DC can use pins 2, 6, 9, 10, 15, 20, 21, 22, 23
 #define TFT_DC    2  //  but certain pairs must NOT be used: 2+10, 6+9, 20+23, 21+22
 #define TFT_RST   -1 // RST can use any pin
+
+
+// default configuration for teensy-eurorack v2
+#define AD7607_BUSY 3
+#define AD7607_START_CONVERSION 5
+#define AD7607_CHIP_SELECT 36
+#define AD7607_RESET 35 // teensy-control-voltage == 4
+#define AD7607_RANGE_SELECT 37
+#define DA_SYNC 38
+#define LRCLK_CPY 40
+
 //Adafruit_ST7735 TFT = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_RST);
 ST7735_t3 TFT = ST7735_t3(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 // GUItool: begin automatically generated code
@@ -77,7 +90,9 @@ void setup() {
   //  delay(1);
   //}
   AudioMemory(80);
-  //pinMode(41, INPUT);
+
+  ad5754.begin(AD7607_BUSY, AD7607_START_CONVERSION, AD7607_CHIP_SELECT, AD7607_RESET, AD7607_RANGE_SELECT,DA_SYNC,LRCLK_CPY);
+
   pinMode(BUTTON, INPUT_PULLUP);
       
   TFT.initR(INITR_144GREENTAB);

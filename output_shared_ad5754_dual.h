@@ -38,10 +38,16 @@ class AudioOutputSharedAD5754Dual : public AudioStream
 {
 public:
 	AudioOutputSharedAD5754Dual() : AudioStream(8, inputQueueArray) {
-	    begin();
 	}
 	virtual void update(void);
-	void begin(void);
+    void begin(
+            int pin_AD7607_BUSY,
+            int pin_AD7607_START_CONVERSION,
+            int pin_AD7607_CHIP_SELECT,
+            int pin_AD7607_RESET,
+            int pin_AD7607_RANGE_SELECT,
+            int pin_DA_SYNC,
+            int pin_LRCLK_CPY);
 
     static void setOutputVoltages(volatile int *voltages, unsigned int read_index);
 

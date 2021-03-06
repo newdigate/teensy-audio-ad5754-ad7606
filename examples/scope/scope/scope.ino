@@ -3,8 +3,19 @@
 #include <SPI.h>
 #include <SD.h>
 #include <SerialFlash.h>
+
+// https://github.com/newdigate/teensy-audio-ad5754-ad7606/tree/remove-timer
 #include "input_shared_ad7606.h"
 #include "output_shared_ad5754_dual.h"
+
+// default configuration for teensy-eurorack v2
+#define AD7607_BUSY 3
+#define AD7607_START_CONVERSION 5
+#define AD7607_CHIP_SELECT 36
+#define AD7607_RESET 35 // teensy-control-voltage == 4
+#define AD7607_RANGE_SELECT 37
+#define DA_SYNC 38
+#define LRCLK_CPY 40
 
 #include "ScopeView.h"
 #include <Adafruit_GFX.h>    // Core graphics library
@@ -40,21 +51,21 @@ int16_t colors[8] = {ST7735_GREEN,ST7735_RED,ST7735_BLUE,ST7735_CYAN,ST7735_MAGE
 ScopeView scopeViewCV1 = ScopeView(TFT, audioRecordQueue1, colors[1], (int16_t)ST7735_BLACK, 64); 
 
 void setup() {
-  Serial.begin(9600);
-  //while(!Serial) {
-  //  delay(1);
-  //}
-  AudioMemory(80);
-  pinMode(41, INPUT);
-  
-  TFT.initR(INITR_144GREENTAB);
-  TFT.setRotation(3);
-  TFT.fillScreen(ST7735_BLACK);
-  
-  sine1.frequency(0.1);
-  sine1.amplitude(1.0);
-  audioRecordQueue1.begin();
+    Serial.begin(9600);
+    AudioMemory(80);
+    pinMode(41, INPUT);
+
+    TFT.initR(INITR_144GREENTAB);
+    TFT.setRotation(3);
+    TFT.fillScreen(ST7735_BLACK);
+
+    ad5754.begin(AD7607_BUSY, AD7607_START_CONVERSION, AD7607_CHIP_SELECT, AD7607_RESET, AD7607_RANGE_SELECT, DA_SYNC, LRCLK_CPY);
+
+    sine1.frequency(0.1);
+    sine1.amplitude(1.0);
+    audioRecordQueue1.begin();
 }
+
 unsigned count = 0;
 void loop() {
   scopeViewCV1.checkForUpdateBuffer();

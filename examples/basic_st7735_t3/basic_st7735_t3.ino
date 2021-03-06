@@ -3,8 +3,20 @@
 #include <SPI.h>
 #include <SD.h>
 #include <SerialFlash.h>
+
+
+// https://github.com/newdigate/teensy-audio-ad5754-ad7606/tree/remove-timer
 #include "input_shared_ad7606.h"
 #include "output_shared_ad5754_dual.h"
+
+// default configuration for teensy-eurorack v2
+#define AD7607_BUSY 3
+#define AD7607_START_CONVERSION 5
+#define AD7607_CHIP_SELECT 36
+#define AD7607_RESET 35 // teensy-control-voltage == 4
+#define AD7607_RANGE_SELECT 37
+#define DA_SYNC 38
+#define LRCLK_CPY 40
 
 #include "ScopeView.h"
 #include <ST7735_t3.h> // Hardware-specific library
@@ -72,44 +84,43 @@ const ScopeView* cvscopes[] = {&scopeViewCV1, &scopeViewCV2, &scopeViewCV3, &sco
 Bounce bouncer = Bounce( BUTTON,5 ); 
 
 void setup() {
-  Serial.begin(9600);
-  //while(!Serial) {
-  //  delay(1);
-  //}
-  AudioMemory(80);
-  //pinMode(41, INPUT);
-  pinMode(BUTTON, INPUT_PULLUP);
-      
-  TFT.initR(INITR_144GREENTAB);
-  TFT.setRotation(3);
-  TFT.fillScreen(ST7735_BLACK);
+    Serial.begin(9600);
+    AudioMemory(80);
+
+    pinMode(BUTTON, INPUT_PULLUP);
+
+    TFT.initR(INITR_144GREENTAB);
+    TFT.setRotation(3);
+    TFT.fillScreen(ST7735_BLACK);
+
+    ad5754.begin(AD7607_BUSY, AD7607_START_CONVERSION, AD7607_CHIP_SELECT, AD7607_RESET, AD7607_RANGE_SELECT, DA_SYNC, LRCLK_CPY);
 
     sine1.frequency(62.5);
     sine1.amplitude(1.0);
-    
+
     sine2.frequency(125);
     sine2.amplitude(1.0);
-    
+
     sine3.frequency(250);
     sine3.amplitude(1.0);
-    
+
     sine4.frequency(500);
     sine4.amplitude(1.0);
-    
+
     sine5.frequency(750);
     sine5.amplitude(1.0);
-    
+
     sine6.frequency(1000);
     sine6.amplitude(1.0);
-    
+
     sine7.frequency(1500);
     sine7.amplitude(1.0);
-    
+
     sine8.frequency(2000);
     sine8.amplitude(1.0);
-    
+
     audioRecordQueue1.begin();
-    audioRecordQueue2.begin();     
+    audioRecordQueue2.begin();
     audioRecordQueue3.begin();
     audioRecordQueue4.begin();
     audioRecordQueue5.begin();

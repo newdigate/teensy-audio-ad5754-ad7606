@@ -37,10 +37,16 @@
 class AudioInputSharedAD7606 : public AudioStream
 {
 public:
-    AudioInputSharedAD7606(void) : AudioStream(0, NULL) { begin(); }
+    AudioInputSharedAD7606(void) : AudioStream(0, NULL) { }
     virtual void update(void);
-    void begin(void);
-
+    void begin(
+            int pin_AD7607_BUSY,
+            int pin_AD7607_START_CONVERSION,
+            int pin_AD7607_CHIP_SELECT,
+            int pin_AD7607_RESET,
+            int pin_AD7607_RANGE_SELECT,
+            int pin_DA_SYNC,
+            int pin_LRCLK_CPY);
     static void consumeIncommingSamples(volatile int8_t *rxbuf, unsigned int index);
 
 

@@ -44,12 +44,24 @@ audio_block_t * AudioOutputSharedAD5754Dual::block_input[8] = {
 };
 bool AudioOutputSharedAD5754Dual::update_responsibility = false;
 
-void AudioOutputSharedAD5754Dual::begin(void)
+void AudioOutputSharedAD5754Dual::begin(
+        int pin_AD7607_BUSY,
+        int pin_AD7607_START_CONVERSION,
+        int pin_AD7607_CHIP_SELECT,
+        int pin_AD7607_RESET,
+        int pin_AD7607_RANGE_SELECT,
+        int pin_DA_SYNC,
+        int pin_LRCLK_CPY)
 {
-    ad5754_ad7606_shared_context::initialize();
-	pinMode(0, OUTPUT);
-	digitalWrite(0, HIGH);
-
+    ad5754_ad7606_shared_context::initialize(
+            pin_AD7607_BUSY,
+            pin_AD7607_START_CONVERSION,
+            pin_AD7607_CHIP_SELECT,
+            pin_AD7607_RESET,
+            pin_AD7607_RANGE_SELECT,
+            pin_DA_SYNC,
+            pin_LRCLK_CPY);
+    
 	for (int i=0; i < 8; i++) {
 		block_input[i] = NULL;
 	}

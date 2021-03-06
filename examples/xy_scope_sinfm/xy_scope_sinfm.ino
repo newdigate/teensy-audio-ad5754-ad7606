@@ -3,8 +3,19 @@
 #include <SPI.h>
 #include <SD.h>
 #include <SerialFlash.h>
+
+// https://github.com/newdigate/teensy-audio-ad5754-ad7606/tree/remove-timer
 #include "input_shared_ad7606.h"
 #include "output_shared_ad5754_dual.h"
+
+// default configuration for teensy-eurorack v2
+#define AD7607_BUSY 3
+#define AD7607_START_CONVERSION 5
+#define AD7607_CHIP_SELECT 36
+#define AD7607_RESET 35 // teensy-control-voltage == 4
+#define AD7607_RANGE_SELECT 37
+#define DA_SYNC 38
+#define LRCLK_CPY 40
 
 //https://github.com/newdigate/teensy-audio-libtftscope/tree/st7735_t3
 #include "XYScopeView.h"
@@ -99,9 +110,9 @@ void setup() {
     sine5.amplitude(0.8);
     sine6.amplitude(0.8); 
     sine7.amplitude(0.8); 
-    sine8.amplitude(0.8); 
+    sine8.amplitude(0.8);
 
-    
+    ad5754.begin(AD7607_BUSY, AD7607_START_CONVERSION, AD7607_CHIP_SELECT, AD7607_RESET, AD7607_RANGE_SELECT, DA_SYNC, LRCLK_CPY);
 
     TFT.initR(INITR_144GREENTAB);
     TFT.setRotation(3);

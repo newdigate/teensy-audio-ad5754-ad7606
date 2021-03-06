@@ -44,3 +44,11 @@ volatile int8_t ad5754_ad7606_shared_context::rxbuf[32];
 
 void (*ad5754_ad7606_shared_context::fn_consumeIncommingSamples)(volatile int8_t *, unsigned int) = nullptr;
 void (*ad5754_ad7606_shared_context::fn_setOutgoingSamples)(volatile int[], unsigned int) = nullptr;
+
+int ad5754_ad7606_shared_context::_pin_AD7607_BUSY = 3; // 3
+int ad5754_ad7606_shared_context::_pin_AD7607_START_CONVERSION = 5;
+int ad5754_ad7606_shared_context::_pin_AD7607_CHIP_SELECT = 36;
+int ad5754_ad7606_shared_context::_pin_AD7607_RESET = 35;
+int ad5754_ad7606_shared_context::_pin_AD7607_RANGE_SELECT = 37;
+int ad5754_ad7606_shared_context::_pin_DA_SYNC = 38;
+int ad5754_ad7606_shared_context::_pin_LRCLK_CPY = 40;

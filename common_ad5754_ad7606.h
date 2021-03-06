@@ -29,12 +29,13 @@
 #ifndef common_ad5754_ad7606_h_
 #define common_ad5754_ad7606_h_
 
-#define AD7607_BUSY 3
-#define AD7607_START_CONVERSION 5
-#define AD7607_CHIP_SELECT 36
-#define AD7607_RESET 35
-#define AD7607_RANGE_SELECT 37
-#define DA_SYNC 38
+//#define AD7607_BUSY 3
+//#define AD7607_START_CONVERSION 5
+//#define AD7607_CHIP_SELECT 36
+//#define AD7607_RESET 35
+//#define AD7607_RANGE_SELECT 37
+//#define DA_SYNC 38
+//#define LRCLK_CPY 40
 
 /* AD5754R Register Map */
 #define AD5754R_REG_DAC             0x00 // DAC register
@@ -66,7 +67,7 @@
 #define MOSI_PIN 26
 #define MISO_PIN 39
 #define SCK_PIN 27
-#define LRCLK_CPY 40
+
 
 class ad5754_ad7606_shared_context {
 
@@ -75,36 +76,51 @@ public:
 
     }
 
-    static void initialize() {
+    static void initialize(
+        int pin_AD7607_BUSY,
+        int pin_AD7607_START_CONVERSION,
+        int pin_AD7607_CHIP_SELECT,
+        int pin_AD7607_RESET,
+        int pin_AD7607_RANGE_SELECT,
+        int pin_DA_SYNC,
+        int pin_LRCLK_CPY) {
         if (_initialized_shared_context) return;
 
+        _pin_AD7607_BUSY = pin_AD7607_BUSY;
+        _pin_AD7607_START_CONVERSION = pin_AD7607_START_CONVERSION;
+        _pin_AD7607_CHIP_SELECT = pin_AD7607_CHIP_SELECT;
+        _pin_AD7607_RESET = pin_AD7607_RESET;
+        _pin_AD7607_RANGE_SELECT = pin_AD7607_RANGE_SELECT;
+        _pin_DA_SYNC = pin_DA_SYNC;
+        _pin_LRCLK_CPY = pin_LRCLK_CPY;
+
         // input pins
-        pinMode(AD7607_BUSY, INPUT_PULLUP);
-        pinMode(LRCLK_CPY, INPUT);
+        pinMode(_pin_AD7607_BUSY, INPUT_PULLUP);
+        pinMode(_pin_LRCLK_CPY, INPUT);
 
         // output pins
-        pinMode(AD7607_START_CONVERSION, OUTPUT);
-        pinMode(AD7607_CHIP_SELECT, OUTPUT);
-        pinMode(AD7607_RESET, OUTPUT);
-        pinMode(AD7607_RANGE_SELECT, OUTPUT);
-        pinMode(DA_SYNC, OUTPUT);
+        pinMode(_pin_AD7607_START_CONVERSION, OUTPUT);
+        pinMode(_pin_AD7607_CHIP_SELECT, OUTPUT);
+        pinMode(_pin_AD7607_RESET, OUTPUT);
+        pinMode(_pin_AD7607_RANGE_SELECT, OUTPUT);
+        pinMode(_pin_DA_SYNC, OUTPUT);
 
-        digitalWrite(AD7607_START_CONVERSION, HIGH);
-        digitalWrite(AD7607_RESET, LOW);
-        digitalWrite(AD7607_CHIP_SELECT, HIGH);
-        digitalWrite(AD7607_RANGE_SELECT, HIGH);
-        digitalWrite(DA_SYNC, HIGH);
+        digitalWrite(_pin_AD7607_START_CONVERSION, HIGH);
+        digitalWrite(_pin_AD7607_RESET, LOW);
+        digitalWrite(_pin_AD7607_CHIP_SELECT, HIGH);
+        digitalWrite(_pin_AD7607_RANGE_SELECT, HIGH);
+        digitalWrite(_pin_DA_SYNC, HIGH);
 
-        attachInterrupt(digitalPinToInterrupt(LRCLK_CPY),timer,RISING);
+        attachInterrupt(digitalPinToInterrupt(_pin_LRCLK_CPY), timer, RISING);
 
         SPI1.setSCK(SCK_PIN);
-        SPI1.setCS(DA_SYNC);
+        SPI1.setCS(_pin_DA_SYNC);
         SPI1.setMOSI(MOSI_PIN);
         SPI1.setMISO(MISO_PIN);
         SPI1.begin();
 
         SPI1.beginTransaction(SPISettings());
-        digitalWrite(DA_SYNC, LOW);
+        digitalWrite(_pin_DA_SYNC, LOW);
         uint8_t configureDac[] = {
                 0x10,
                 0x00,
@@ -115,12 +131,12 @@ public:
         };
         SPI1.transfer(configureDac, 6);
         SPI1.endTransaction();
-        digitalWrite(DA_SYNC, HIGH);
+        digitalWrite(_pin_DA_SYNC, HIGH);
         delayMicroseconds(10);
 
 
         // Set voltage range for DAC0, DAC1
-        digitalWrite(DA_SYNC, LOW);
+        digitalWrite(_pin_DA_SYNC, LOW);
         uint8_t configureDacVoltageRange[] = {
                 (AD5754R_REG_RANGE_SELECT << 3) + AD5754R_DAC_ALL,
                 0x00,
@@ -132,7 +148,7 @@ public:
         SPI1.beginTransaction(SPISettings());
         SPI1.transfer(configureDacVoltageRange, 6);
         SPI1.endTransaction();
-        digitalWrite(DA_SYNC, HIGH);
+        digitalWrite(_pin_DA_SYNC, HIGH);
         delayMicroseconds(10);
 
         setClockDivider_noInline(30000000);         // 30 MHz
@@ -166,7 +182,7 @@ public:
         while (IMXRT_LPSPI3_S.FSR & 0x1f);          //FIFO Status register: wait until fifo is complete
         while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register? Module Busy flag
 
-        SPI1.setCS(DA_SYNC);                        //Set DA_SYNC to HARDWARE CS
+        SPI1.setCS(_pin_DA_SYNC);                        //Set DA_SYNC to HARDWARE CS
         IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(7))) | LPSPI_TCR_FRAMESZ(47) ;  // Change framesize to 48 bits
         IMXRT_LPSPI3_S.FCR = 0;
         IMXRT_LPSPI3_S.DER = LPSPI_DER_TDDE;        //DMA Enable register: enable DMA on TX
@@ -177,12 +193,12 @@ public:
     static void beginReceive() {
         IMXRT_LPSPI3_S.CR = IMXRT_LPSPI3_S.CR | LPSPI_CR_RRF;                                           // control register: reset receive fifo
 
-        *(portConfigRegister(DA_SYNC)) = 0;                                                             // Turn hardware CS off
+        *(portConfigRegister(_pin_DA_SYNC)) = 0;                                                             // Turn hardware CS off
         IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(47))) | LPSPI_TCR_FRAMESZ(7);    // Change framesize to 8 bits
         IMXRT_LPSPI3_S.FCR = 0;                                                                         // Reset FIFO control register
         IMXRT_LPSPI3_S.DER = LPSPI_DER_RDDE;                                                            // DMA Enable register: enable DMA on RX
         IMXRT_LPSPI3_S.SR = 0x3f00;                                                                     // status register: clear out all of the other status...
-        digitalWriteFast(AD7607_CHIP_SELECT, LOW);
+        digitalWriteFast(_pin_AD7607_CHIP_SELECT, LOW);
         dmarx.enable();
 
         //Trigger SCK for 16 bytes by writing to the Transmit Data Register
@@ -197,12 +213,21 @@ public:
 protected:
     static volatile bool alreadyReset;
     static volatile bool _isBusy;
+
+    static int _pin_AD7607_BUSY;
+    static int _pin_AD7607_START_CONVERSION;
+    static int _pin_AD7607_CHIP_SELECT;
+    static int _pin_AD7607_RESET;
+    static int _pin_AD7607_RANGE_SELECT;
+    static int _pin_DA_SYNC;
+    static int _pin_LRCLK_CPY;
+
     static void toggleStartConversion(){
         if (_isBusy) return;
 
         _isBusy = true;
-        digitalWriteFast(AD7607_START_CONVERSION, LOW);
-        digitalWriteFast(AD7607_START_CONVERSION, HIGH);
+        digitalWriteFast(_pin_AD7607_START_CONVERSION, LOW);
+        digitalWriteFast(_pin_AD7607_START_CONVERSION, HIGH);
     }
 
     static void config_dma(void)
@@ -253,7 +278,7 @@ protected:
             fn_consumeIncommingSamples(rxbuf, read_index);
         };
 
-        digitalWriteFast(AD7607_CHIP_SELECT, HIGH);
+        digitalWriteFast(_pin_AD7607_CHIP_SELECT, HIGH);
         _isBusy = false;
     }
 
