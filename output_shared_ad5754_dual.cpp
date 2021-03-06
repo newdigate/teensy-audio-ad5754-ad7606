@@ -80,7 +80,7 @@ void AudioOutputSharedAD5754Dual::update(void)
     digitalWrite(0, HIGH);
 }
 
-void AudioOutputSharedAD5754Dual::setOutputVoltages(int *voltages, unsigned int read_index) {
+void AudioOutputSharedAD5754Dual::setOutputVoltages(volatile int *voltages, unsigned int read_index) {
     const uint32_t zero_level = 0xFFFF / 2;
     voltages[0] = (block_input[0] != NULL) ? block_input[0]->data[read_index] + zero_level : zero_level;
     voltages[1] = (block_input[1] != NULL) ? block_input[1]->data[read_index] + zero_level : zero_level;
