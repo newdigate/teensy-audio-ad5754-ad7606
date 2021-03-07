@@ -96,7 +96,7 @@ public:
         digitalWrite(DA_SYNC, HIGH);
 
         attachInterrupt(digitalPinToInterrupt(LRCLK_CPY),timer,RISING);
-        NVIC_SET_PRIORITY(IRQ_LPSPI3, 10);
+        //NVIC_SET_PRIORITY(IRQ_LPSPI3, 10);
 
         SPI1.setSCK(SCK_PIN);
         SPI1.setCS(DA_SYNC);
@@ -172,33 +172,34 @@ public:
         //interrupts();
         while (IMXRT_LPSPI3_S.FSR & 0x1f);          //FIFO Status register: wait until fifo is complete
         while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register? Module Busy flag
-
+        SPI1.setCS(DA_SYNC); //Set DA_SYNC to HARDWARE CS
         SPI1.beginTransaction(SPISettings(30000000, MSBFIRST, SPI_MODE0));
-        noInterrupts();
-        //SPI1.setCS(DA_SYNC);                        //Set DA_SYNC to HARDWARE CS
+        //noInterrupts();
+
         IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(7))) | LPSPI_TCR_FRAMESZ(47) ;  // Change framesize to 48 bits
         IMXRT_LPSPI3_S.FCR = 0;
         IMXRT_LPSPI3_S.DER = LPSPI_DER_TDDE;        //DMA Enable register: enable DMA on TX
         IMXRT_LPSPI3_S.SR = 0x3f00;                 // status register: clear out all of the other status...
 
-        interrupts();
+        //interrupts();
 
 
         dmatx.enable();
     }
 
     static void beginReceive() {
+        *(portConfigRegister(DA_SYNC)) = 0; // Turn hardware CS off
         SPI1.beginTransaction(SPISettings(30000000, MSBFIRST, SPI_MODE0));
-        noInterrupts();
+        //noInterrupts();
         IMXRT_LPSPI3_S.CR = IMXRT_LPSPI3_S.CR | LPSPI_CR_RRF;                                           // control register: reset receive fifo
 
-        //*(portConfigRegister(DA_SYNC)) = 0;                                                             // Turn hardware CS off
+
         IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(47))) | LPSPI_TCR_FRAMESZ(7);    // Change framesize to 8 bits
         IMXRT_LPSPI3_S.FCR = 0;                                                                         // Reset FIFO control register
         IMXRT_LPSPI3_S.DER = LPSPI_DER_RDDE;                                                            // DMA Enable register: enable DMA on RX
         IMXRT_LPSPI3_S.SR = 0x3f00;                                                                     // status register: clear out all of the other status...
         digitalWriteFast(AD7607_CHIP_SELECT, LOW);
-        interrupts();
+        //interrupts();
         dmarx.enable();
 
         //Trigger SCK for 16 bytes by writing to the Transmit Data Register
@@ -330,8 +331,7 @@ protected:
     static DMAChannel dmatx;
 
     static volatile uint8_t txbuf[32];
-    static int txvoltages[8];
-
+    static volatile int txvoltages[8];
     static volatile int8_t rxbuf[32];
 
 };

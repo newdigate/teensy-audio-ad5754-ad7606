@@ -38,11 +38,11 @@ DMAChannel ad5754_ad7606_shared_context::dmatx(false);
 
 DMAChannel ad5754_ad7606_shared_context::dmarx(false);
 
-DMAMEM volatile uint8_t ad5754_ad7606_shared_context::txbuf[32] = {};
+volatile uint8_t ad5754_ad7606_shared_context::txbuf[32] = {};
 
-int ad5754_ad7606_shared_context::txvoltages[8] = {0,0,0,0,0,0,0,0};
+volatile int ad5754_ad7606_shared_context::txvoltages[8] = {0,0,0,0,0,0,0,0};
 
-DMAMEM volatile int8_t ad5754_ad7606_shared_context::rxbuf[32];
+volatile int8_t ad5754_ad7606_shared_context::rxbuf[32];
 
 //IntervalTimer ad5754_ad7606_shared_context::_timer = IntervalTimer();
 
