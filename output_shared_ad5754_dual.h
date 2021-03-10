@@ -43,7 +43,7 @@ public:
 	virtual void update(void);
 	void begin(void);
 
-    static void setOutputVoltages(volatile int *voltages, unsigned int read_index);
+    static void setOutputVoltages(volatile int *voltages, volatile unsigned int read_index);
 
 protected:
 	static audio_block_t *block_input[8];

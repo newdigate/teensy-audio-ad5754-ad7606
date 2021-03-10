@@ -78,6 +78,11 @@ public:
     static void initialize() {
         if (_initialized_shared_context) return;
 
+        //Serial.begin(9600);
+        //while (!Serial);
+        //Serial.println("initialize begin...");
+
+        noInterrupts();
         // input pins
         pinMode(AD7607_BUSY, INPUT_PULLUP);
 
@@ -95,7 +100,7 @@ public:
         digitalWrite(AD7607_RANGE_SELECT, HIGH);
         digitalWrite(DA_SYNC, HIGH);
 
-        attachInterrupt(digitalPinToInterrupt(LRCLK_CPY),timer,RISING);
+
         //NVIC_SET_PRIORITY(IRQ_LPSPI3, 10);
 
         SPI1.setSCK(SCK_PIN);
@@ -136,22 +141,33 @@ public:
         digitalWrite(DA_SYNC, HIGH);
         delayMicroseconds(10);
 
-        SPI1.usingInterrupt(IRQ_GPIO6789);
+        //SPI1.usingInterrupt(IRQ_GPIO6789);
 
         setClockDivider_noInline(30000000);         // 30 MHz
         config_dma();
+
+        Serial.println("Initialized...");
         _initialized_shared_context = true;
+        attachInterrupt(digitalPinToInterrupt(LRCLK_CPY),timer,RISING);
+        interrupts();
     }
 
     static void resetBuffers(){
+        bool proceed = false;
+
+        noInterrupts();
         if(!alreadyReset) {
             alreadyReset = true;
-            //_timer.end();
-            //_timer.begin(timer, (1000000.0 / 44100.0) - 3.0);
-            read_index = 0;
-            toggleStartConversion();
-            beginTransfer();
+            proceed = true;
         }
+        interrupts();
+
+        if (proceed) {
+            read_index = 0;
+        }
+        toggleStartConversion();
+        beginTransfer();
+
     }
 
     static void beginTransfer()
@@ -208,13 +224,12 @@ public:
         }
     }
 
-    static void (*fn_consumeIncommingSamples)(volatile int8_t *, unsigned int);
-    static void (*fn_setOutgoingSamples)(volatile int[], unsigned int);
+    static void (*fn_consumeIncommingSamples)(const volatile int8_t *, volatile unsigned int);
+    static void (*fn_setOutgoingSamples)(volatile int[], volatile unsigned int);
 
 protected:
     static volatile bool alreadyReset;
     static volatile bool _isBusy;
-    static volatile u_long _txCompletedMicros;
     static void toggleStartConversion(){
         if (_isBusy) return;
 
@@ -331,7 +346,7 @@ protected:
     static DMAChannel dmatx;
 
     static volatile uint8_t txbuf[32];
-    static volatile int txvoltages[8];
+    static volatile int txvoltages[32];
     static volatile int8_t rxbuf[32];
 
 };
