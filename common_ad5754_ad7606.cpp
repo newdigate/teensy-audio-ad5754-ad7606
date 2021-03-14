@@ -30,7 +30,8 @@
 
 bool ad5754_ad7606_shared_context::_initialized_shared_context = false;
 volatile bool ad5754_ad7606_shared_context::alreadyReset = false;
-unsigned int ad5754_ad7606_shared_context::read_index = 0;
+volatile bool ad5754_ad7606_shared_context::_isBusy = false;
+volatile unsigned int ad5754_ad7606_shared_context::read_index = 0;
 
 DMAChannel ad5754_ad7606_shared_context::dmatx(false);
 
@@ -38,11 +39,9 @@ DMAChannel ad5754_ad7606_shared_context::dmarx(false);
 
 volatile uint8_t ad5754_ad7606_shared_context::txbuf[32] = {};
 
-int ad5754_ad7606_shared_context::txvoltages[8] = {0,0,0,0,0,0,0,0};
+volatile int ad5754_ad7606_shared_context::txvoltages[32] = {0};
 
 volatile int8_t ad5754_ad7606_shared_context::rxbuf[32];
 
-IntervalTimer ad5754_ad7606_shared_context::_timer = IntervalTimer();
-
-void (*ad5754_ad7606_shared_context::fn_consumeIncommingSamples)(volatile int8_t *, unsigned int) = nullptr;
-void (*ad5754_ad7606_shared_context::fn_setOutgoingSamples)(int[], unsigned int) = nullptr;
+void (*ad5754_ad7606_shared_context::fn_consumeIncommingSamples)(const volatile int8_t *, volatile unsigned int) = nullptr;
+void (*ad5754_ad7606_shared_context::fn_setOutgoingSamples)(volatile int[], volatile unsigned int) = nullptr;

@@ -32,7 +32,7 @@
 #define AD7607_BUSY 3
 #define AD7607_START_CONVERSION 5
 #define AD7607_CHIP_SELECT 36
-#define AD7607_RESET 4
+#define AD7607_RESET 35
 #define AD7607_RANGE_SELECT 37
 #define DA_SYNC 38
 
@@ -66,6 +66,7 @@
 #define MOSI_PIN 26
 #define MISO_PIN 39
 #define SCK_PIN 27
+#define LRCLK_CPY 40
 
 class ad5754_ad7606_shared_context {
 
@@ -77,6 +78,11 @@ public:
     static void initialize() {
         if (_initialized_shared_context) return;
 
+        //Serial.begin(9600);
+        //while (!Serial);
+        //Serial.println("initialize begin...");
+
+        noInterrupts();
         // input pins
         pinMode(AD7607_BUSY, INPUT_PULLUP);
 
@@ -86,12 +92,16 @@ public:
         pinMode(AD7607_RESET, OUTPUT);
         pinMode(AD7607_RANGE_SELECT, OUTPUT);
         pinMode(DA_SYNC, OUTPUT);
+        pinMode(LRCLK_CPY, INPUT);
 
         digitalWrite(AD7607_START_CONVERSION, HIGH);
         digitalWrite(AD7607_RESET, LOW);
         digitalWrite(AD7607_CHIP_SELECT, HIGH);
         digitalWrite(AD7607_RANGE_SELECT, HIGH);
         digitalWrite(DA_SYNC, HIGH);
+
+
+        //NVIC_SET_PRIORITY(IRQ_LPSPI3, 10);
 
         SPI1.setSCK(SCK_PIN);
         SPI1.setCS(DA_SYNC);
@@ -131,30 +141,41 @@ public:
         digitalWrite(DA_SYNC, HIGH);
         delayMicroseconds(10);
 
+        //SPI1.usingInterrupt(IRQ_GPIO6789);
+
         setClockDivider_noInline(30000000);         // 30 MHz
         config_dma();
+
+        Serial.println("Initialized...");
         _initialized_shared_context = true;
+        attachInterrupt(digitalPinToInterrupt(LRCLK_CPY),timer,RISING);
+        interrupts();
     }
 
     static void resetBuffers(){
+        bool proceed = false;
+
         if(!alreadyReset) {
             alreadyReset = true;
-            _timer.end();
-            _timer.begin(timer, (1000000.0 / 44100.0) - 0.075);
-            read_index = 0;
-            toggleStartConversion();
-            beginTransfer();
+            proceed = true;
         }
+
+        if (proceed) {
+            read_index = 0;
+        }
+        toggleStartConversion();
+        beginTransfer();
+
     }
 
     static void beginTransfer()
     {
-        noInterrupts();
+        //noInterrupts();
         if (read_index < 128 && fn_setOutgoingSamples != nullptr) {
             fn_setOutgoingSamples(txvoltages, read_index);
         };
 
-        for (uint8_t count=0; count<4; count++) {
+        for (volatile uint8_t count=0; count<4; count++) {
             txbuf[(count*8)+3] = count;                     //DAC0, channel=count
             txbuf[(count*8)+5] = txvoltages[count+4] >> 8;
             txbuf[(count*8)+4] = txvoltages[count+4] & 0xff;
@@ -162,47 +183,57 @@ public:
             txbuf[(count*8)+2] = txvoltages[count] >> 8;
             txbuf[(count*8)+1] = txvoltages[count] & 0xff;
         }
-        interrupts();
+        //interrupts();
         while (IMXRT_LPSPI3_S.FSR & 0x1f);          //FIFO Status register: wait until fifo is complete
         while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register? Module Busy flag
-        SPI1.setCS(DA_SYNC);                        //Set DA_SYNC to HARDWARE CS
+        SPI1.setCS(DA_SYNC); //Set DA_SYNC to HARDWARE CS
+        SPI1.beginTransaction(SPISettings(30000000, MSBFIRST, SPI_MODE0));
+        //noInterrupts();
+
         IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(7))) | LPSPI_TCR_FRAMESZ(47) ;  // Change framesize to 48 bits
         IMXRT_LPSPI3_S.FCR = 0;
         IMXRT_LPSPI3_S.DER = LPSPI_DER_TDDE;        //DMA Enable register: enable DMA on TX
         IMXRT_LPSPI3_S.SR = 0x3f00;                 // status register: clear out all of the other status...
+
+        //interrupts();
+
+
         dmatx.enable();
     }
 
     static void beginReceive() {
-        while (IMXRT_LPSPI3_S.FSR & 0x1f);          //FIFO Status register: wait until fifo is complete
-        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;  //Status Register: wait until Module Busy flag is cleared
-
+        *(portConfigRegister(DA_SYNC)) = 0; // Turn hardware CS off
+        SPI1.beginTransaction(SPISettings(30000000, MSBFIRST, SPI_MODE0));
+        //noInterrupts();
         IMXRT_LPSPI3_S.CR = IMXRT_LPSPI3_S.CR | LPSPI_CR_RRF;                                           // control register: reset receive fifo
 
-        *(portConfigRegister(DA_SYNC)) = 0;                                                             // Turn hardware CS off
+
         IMXRT_LPSPI3_S.TCR = (IMXRT_LPSPI3_S.TCR & ~(LPSPI_TCR_FRAMESZ(47))) | LPSPI_TCR_FRAMESZ(7);    // Change framesize to 8 bits
         IMXRT_LPSPI3_S.FCR = 0;                                                                         // Reset FIFO control register
         IMXRT_LPSPI3_S.DER = LPSPI_DER_RDDE;                                                            // DMA Enable register: enable DMA on RX
         IMXRT_LPSPI3_S.SR = 0x3f00;                                                                     // status register: clear out all of the other status...
-
+        digitalWriteFast(AD7607_CHIP_SELECT, LOW);
+        //interrupts();
         dmarx.enable();
-        digitalWrite(AD7607_CHIP_SELECT, LOW);
 
         //Trigger SCK for 16 bytes by writing to the Transmit Data Register
-        for (int i=0; i < 16; i++) {
+        for (volatile int i=0; i < 16; i++) {
             IMXRT_LPSPI3_S.TDR = 0xFF;
         }
     }
 
-    static void (*fn_consumeIncommingSamples)(volatile int8_t *, unsigned int);
-    static void (*fn_setOutgoingSamples)(int[], unsigned int);
+    static void (*fn_consumeIncommingSamples)(const volatile int8_t *, volatile unsigned int);
+    static void (*fn_setOutgoingSamples)(volatile int[], volatile unsigned int);
 
 protected:
     static volatile bool alreadyReset;
-
+    static volatile bool _isBusy;
     static void toggleStartConversion(){
-        digitalWrite(AD7607_START_CONVERSION, LOW);
-        digitalWrite(AD7607_START_CONVERSION, HIGH);
+        if (_isBusy) return;
+
+        _isBusy = true;
+        digitalWriteFast(AD7607_START_CONVERSION, LOW);
+        digitalWriteFast(AD7607_START_CONVERSION, HIGH);
     }
 
     static void config_dma(void)
@@ -231,44 +262,47 @@ protected:
     }
 
     static void txisr(void) {
+        //noInterrupts();
         dmatx.clearInterrupt();
-
         SPI1.endTransaction();
-
         IMXRT_LPSPI3_S.FCR = LPSPI_FCR_TXWATER(15); //FIFO control register
         IMXRT_LPSPI3_S.DER = 0;
         IMXRT_LPSPI3_S.CR = LPSPI_CR_MEN | LPSPI_CR_RRF | LPSPI_CR_RTF; // actually clear both...
         IMXRT_LPSPI3_S.SR = 0x3f00;    // clear out all of the other status...
-        while (IMXRT_LPSPI3_S.FSR & 0x1f);
-        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF) ;
+        //interrupts();
+
+        while (IMXRT_LPSPI3_S.FSR & 0x1f);//FIFO Status register: wait until fifo is complete
+        while (IMXRT_LPSPI3_S.SR & LPSPI_SR_MBF); //Status Register: wait until Module Busy flag is cleared
         beginReceive();
     }
 
     static void rxisr(void) {
+        //noInterrupts();
         dmarx.clearInterrupt();
         SPI1.endTransaction();
-
         IMXRT_LPSPI3_S.FCR = LPSPI_FCR_TXWATER(15); // _spi_fcr_save; // restore the FSR status...
         IMXRT_LPSPI3_S.DER = 0;
         IMXRT_LPSPI3_S.CR = LPSPI_CR_MEN | LPSPI_CR_RRF | LPSPI_CR_RTF; // actually clear both...
         IMXRT_LPSPI3_S.SR = 0x3f00;    // clear out all of the other status...
+        //interrupts();
 
         if (read_index < 128 && fn_consumeIncommingSamples != nullptr) {
             fn_consumeIncommingSamples(rxbuf, read_index);
         };
 
-        digitalWrite(AD7607_CHIP_SELECT, HIGH);
+        digitalWriteFast(AD7607_CHIP_SELECT, HIGH);
+        _isBusy = false;
     }
 
     static void timer(void){
+        if (_isBusy) return;
+
         if (read_index > 2 && alreadyReset)
             alreadyReset = false;
         if (read_index < 127) {
             read_index++;
             toggleStartConversion();
             beginTransfer();
-        } else {
-            _timer.end();
         }
     }
 
@@ -304,17 +338,14 @@ protected:
     }
 
     static bool _initialized_shared_context;
-    static unsigned int read_index;
+    static volatile unsigned int read_index;
 
     static DMAChannel dmarx;
     static DMAChannel dmatx;
 
     static volatile uint8_t txbuf[32];
-    static int txvoltages[8];
-
+    static volatile int txvoltages[32];
     static volatile int8_t rxbuf[32];
-
-    static IntervalTimer _timer;
 
 };
 

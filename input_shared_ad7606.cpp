@@ -78,7 +78,7 @@ void AudioInputSharedAD7606::update(void) {
     ad5754_ad7606_shared_context::resetBuffers();
 }
 
-void AudioInputSharedAD7606::consumeIncommingSamples(volatile int8_t *rxbuf, unsigned int index) {
+void AudioInputSharedAD7606::consumeIncommingSamples(const volatile int8_t *rxbuf, volatile unsigned int index) {
     for (int i = 0; i < 8; i++) {
         if (block_incoming[i] != NULL) {
             block_incoming[i]->data[index] = (rxbuf[i * 2] << 8) + rxbuf[(i * 2) + 1];
