@@ -155,12 +155,10 @@ public:
     static void resetBuffers(){
         bool proceed = false;
 
-        noInterrupts();
         if(!alreadyReset) {
             alreadyReset = true;
             proceed = true;
         }
-        interrupts();
 
         if (proceed) {
             read_index = 0;
