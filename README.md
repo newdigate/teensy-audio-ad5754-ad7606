@@ -3,3 +3,5 @@
 * Be cautious: this is an experimental work in progress :)
 
 ![SPI_Logic_Anaylzer.png](SPI_Logic_Anaylzer.png)
+
+![signal](wavedrom.json)
