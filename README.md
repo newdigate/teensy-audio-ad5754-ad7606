@@ -4,4 +4,4 @@
 
 ![SPI_Logic_Anaylzer.png](SPI_Logic_Anaylzer.png)
 
-![signal](wavedrom.json)
+![Alt](https://svg.wavedrom.com/github/newdigate/teensy-audio-ad5754-ad7606/main/wavedrom.json)
