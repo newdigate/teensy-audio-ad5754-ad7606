@@ -6,4 +6,4 @@
 
 ![signal step4](https://svg.wavedrom.com/github/wavedrom/wavedrom/master/test/signal-step4.json5)
 
-![Alt](https://svg.wavedrom.com/github/newdigate/teensy-audio-ad5754-ad7606/main/wavedrom.json)
+![Alt](https://svg.wavedrom.com/github/newdigate/teensy-audio-ad5754-ad7606/main/wavedrom.json5)
