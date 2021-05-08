@@ -145,10 +145,8 @@ import_arduino_library(SD)
 
 teensy_add_executable(TeensyAudioSPISharedLibrary
         main.cpp
-        output_shared_ad5754_dual.cpp
-        output_shared_ad5754_dual.h
-        input_shared_ad7606.cpp
-        input_shared_ad7606.h
-        common_ad5754_ad7606.h
-        common_ad5754_ad7606.cpp
+        input_ad7606.h
+        input_ad7606.cpp
+        output_ad5754.h
+        output_ad5754.cpp
         )
